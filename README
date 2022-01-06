@@ -1,0 +1,102 @@
+Nume: Matisan Razvan-Andrei
+Grupa: 324CA
+
+                            Tema 1 - Protocoale de comunicatii
+
+    - In cadrul acestei teme, am realizat functionalitatile unui router.
+    - Acesta primeste 2 tipuri de pachete: ARP sau IP.
+    - In continuare, voi descrie, pe larg, cum am abordat fiecare pachet,
+    care este flow-ul programului, cum am utilizat functiile din skel.c
+    si voi discuta despre eventualele dificultati pe care le-am intalnit
+    in rezolvarea temei.
+
+    1. Parsarea tabelei de rutare
+
+    - Primul lucru pe care l-am facut a fost sa parsez tabela de rutare,
+    alocand un vector de 65.000 de elemente in care sa-mi stochez toate
+    intrarile din tabela.
+    - Apoi, am sortat tabela dupa prefix, astfel incat, atunci cand fac
+    cautari multiple in tabela de rutare, sa pot face asta in O(log n)
+    aplicand cautare binara (care este, clar, mai bun decat cautarea liniara).
+    - Sortarea a fost facuta folosind functia qsort din C.
+
+    2. Crearea tabelei ARP
+
+    - Am creat o tabela ARP dinamica, ce are initial 0 elemente si care se
+    actualizeaza pe masura ce am nevoie de anumite adrese mac corespunzatoare
+    unor adrese IP si, evident, primesc un ARP reply in acest sens.
+
+    3. Coada
+
+    - Coada este folosita pentru a retine pachetele care nu au putut fi
+    forwardate pentru ca nu cunoasteam adresa mac a next_hop-ului. Acestea
+    se adauga in coada in momentul in care nu am gasit adresa mac si se
+    scot cand primesc un ARP reply.
+
+    4. Flow-ul programului
+
+    a) Primirea unui pachet IP
+    - In momentul in care am primit un pachet IP, tot ceea ce am facut a fost
+    sa iau 2 cazuri: pachetul ii este destinat routerului sau altfel.
+     I. Daca pachetul este destinat routerului, atunci acesta ii da drop.
+     Insa, trebuie sa-i raspunda inainte, dar numai daca acesta este de tip
+     ICMP Echo. Astfel, aici am folosit functia send_icmp(...) pentru a
+     trimite un reply.
+
+     II. Daca pachetul nu imi este mie destinat => ii dau forward.
+        - Astfel, voi verifica, mai intai, daca ttl > 1 si checksum-ul este
+        corect. In caz contrar, voi da drop la pachet si trimit un mesaj de
+        eroare in cazul in care ttl <= 1 (pt time limit exceeded).
+        - Apoi, voi actualiza ttl-ul si checksum-ul;
+        - Dupa, voi cauta cea mai buna ruta pentru a-i da forward, folosindu-ma
+        de functia get_best route(...). Aceasta, asa cum am amintit si mai sus,
+        imi returneaza cea mai buna ruta posibila (dupa formula din enunt) si,
+        in caz contrar, imi va returna NULL.
+        - Astfel, daca nu am gasit o ruta pentru forward, ii dau drop
+        pachetului si trimit un mesaj de eroare (destination unreachable).
+        - Altfel, o sa caut adresa mac pentru next_hop-ul acelei rute,
+        folosindu-ma de functia implementata din laboratorul 4, get_arp_entry.
+            - Daca n-o gasesc, atunci o sa adaug pachetul in coada si trimit
+            un ARP request catre o adresa de broadcast astfel incat sa aflu
+            adresa mac specifica. Ea va fi aflata atunci cand voi primi un ARP
+            reply de la adresa pe care o cautam.
+            - Altfel, schimb adresele mac si ii dau forward pachetului (exact
+            ca in laboratorul 4).
+    
+    b) Primirea unui pachet ARP
+    - In momentul in care am primit un pachet ARP, tot ceea ce am facut a fost
+    sa iau 2 cazuri: daca este de tip ARP request sau ARP reply.
+     I. Daca pachetul este ARP request, atunci voi trimite un pachet ARP reply
+     (folosindu-ma de functia send_arp_reply).
+     II. Daca pachetul este ARP reply, atunci verific daca am pachete in coada
+     pentru care am nevoie sa stiu adresa mac, actualizez tabela ARP SI ii
+     dau forward pachetului (forward-ul se face similar cu ce am facut la IP,
+     numai ca aici n-am mai verificat ca nu gaseste o cea mai buna ruta sau ca
+     mac-ul este necunoscut, pentru ca:
+        a) el nu ar fi fost adaugat in coada daca nu ar fi fost un best_route
+        b) deja este cunoscuta adresa mac, pentru ca am actualizat-o.
+
+
+    5. Probleme intampinate si posibile limitari. Feedback
+        * Daca mask-urile nu ar fi fost aceleasi pentru orice intrare
+    din tabela de rutare, atunci cautarea binara nu ar fi mers. O modalitate
+    mult mai robusta ar fi fost implementarea unui trie (dar, din pacate,
+    mi-am dat seama de ea mult prea tarziu).
+        * Una dintre problemele cele mai mari pe care le-am avut a fost cu
+    tipul de sortare pe care l-am ales. Prima data, am facut un bubble_sort
+    si am trecut prin experienta de a-mi trece unele teste doar ocazional.
+    Apoi, am folosit quick sort si totul a mers mult mai bine.
+        * Mi-a fost foarte greu sa inteleg la inceput argumentele functiilor
+    din skel.c. Consider ca enuntul este foarte cuprinzator, insa cred ca o
+    descriere cat se poate de sumara a functiilor din skel.c ar ajuta mult
+    viitoarele generatii.
+        * O problema pe care am stat foarte mult a fost sa ma prind ca unele
+    teste imi picau pentru ca existau cazuri in care primeam ARP reply-uri
+    chiar daca n-am facut niciun ARP request. Am rezolvat aceasta problema
+    verificand, inainte de a face update in tabela ARP, ca
+    am elemente in coada.
+        * Multe dintre functiile/denumirile pe care le-am luat au fost din
+    laboratorul 4.
+        * Nu am eliberat memoria, pentru ca nu voi iesi niciodata din bucla
+    infinita.
+                    
